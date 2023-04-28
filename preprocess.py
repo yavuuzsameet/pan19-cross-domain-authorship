@@ -5,6 +5,7 @@ import argparse
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+import json
 
 # Download the NLTK stop words if you haven't already
 nltk.download('stopwords')
@@ -21,6 +22,24 @@ def load_data(problem_folder):
         for author_file in author_files:
             file_path = os.path.join(author_path, author_file)
             data.append((file_path, author_folder))
+
+    return data
+
+def load_unknown_data(problem_folder):
+    unknown_folder = os.path.join(problem_folder, 'unknown')
+    ground_truth_file = os.path.join(problem_folder, 'ground-truth.json')
+
+    with open(ground_truth_file, 'r') as f:
+        ground_truth = json.load(f)['ground_truth']
+
+    label_dict = {entry['unknown-text']: entry['true-author'] for entry in ground_truth}
+
+    data = []
+
+    for filename in os.listdir(unknown_folder):
+        file_path = os.path.join(unknown_folder, filename)
+        author = label_dict[filename]
+        data.append((file_path, author))
 
     return data
 
@@ -62,9 +81,11 @@ def preprocess_and_save_files(input_base_path, output_base_path):
     problem_folders = [os.path.join(input_base_path, d) for d in os.listdir(input_base_path) if (d.startswith("problem") and int(d[-2:]) < 6)]
 
     for problem_folder in problem_folders:
-        data = load_data(problem_folder)
         problem_name = os.path.basename(problem_folder)
         output_problem_path = os.path.join(output_base_path, problem_name)
+        
+        # Process candidate files
+        data = load_data(problem_folder)
 
         if not os.path.exists(output_problem_path):
             os.makedirs(output_problem_path)
@@ -76,6 +97,17 @@ def preprocess_and_save_files(input_base_path, output_base_path):
                 os.makedirs(output_author_path)
 
             output_file = os.path.join(output_author_path, os.path.basename(input_file))
+            process_and_save_file(input_file, output_file)
+
+        # Process unknown files
+        unknown_data = load_unknown_data(problem_folder)
+        output_unknown_path = os.path.join(output_problem_path, 'unknown')
+
+        if not os.path.exists(output_unknown_path):
+            os.makedirs(output_unknown_path)
+
+        for input_file, author in unknown_data:
+            output_file = os.path.join(output_unknown_path, os.path.basename(input_file))
             process_and_save_file(input_file, output_file)
 
 
