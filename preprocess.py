@@ -61,8 +61,8 @@ def preprocess(text):
     words = [w for w in words if w not in stop_words]
 
     # Apply Porter stemming
-    stemmer = PorterStemmer()
-    words = [stemmer.stem(w) for w in words]
+    #stemmer = PorterStemmer()
+    #words = [stemmer.stem(w) for w in words]
 
     return ' '.join(words)
 
@@ -107,7 +107,7 @@ def preprocess_and_save_files(input_base_path, output_base_path):
             os.makedirs(output_unknown_path)
 
         for input_file, author in unknown_data:
-            output_file = os.path.join(output_unknown_path, author + '-' + os.path.basename(input_file))
+            output_file = os.path.join(output_unknown_path, os.path.basename(input_file) + '-' + author)
             process_and_save_file(input_file, output_file)
 
 
