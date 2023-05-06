@@ -2,14 +2,15 @@ from sklearn import preprocessing
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report, accuracy_score
-from sklearn.multiclass import OneVsRestClassifier
+from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier
 from sklearn.svm import SVC
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, KFold
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from scipy.sparse import hstack
 from collections import defaultdict
+import numpy as np
 import argparse
 import os
 import json
@@ -106,16 +107,13 @@ def output_y_pred(y_pred, problem_folder):
     with open(os.path.join(problem_folder, 'answers-{}.json'.format(problem_folder.split("/")[1])), 'w') as f:
         json.dump(predictions, f)
 
-def train(problem_folder, vectorizer, classifier):
-    X_train, y_train = load_train_data(problem_folder)
+def train(X_train, y_train, vectorizer, classifier):
     X_train = vectorizer.fit_transform(X_train)
 
     #X_train = combine_features(X_train, vectorizers, fit=True)
 
     max_abs_scaler = preprocessing.MaxAbsScaler()
     scaled_train_data = max_abs_scaler.fit_transform(X_train)
-    
-    classifier=CalibratedClassifierCV(OneVsRestClassifier(classifier), method='sigmoid', n_jobs=-1)
 
     classifier.fit(scaled_train_data, y_train)
     # best_clf = classifier.best_estimator_
@@ -126,8 +124,7 @@ def train(problem_folder, vectorizer, classifier):
 
     return classifier, max_abs_scaler
 
-def test(problem_folder, vectorizer, clf, max_abs_scaler):
-    X_test, y_test = load_test_data(problem_folder)
+def test(X_test, y_test, vectorizer, clf, max_abs_scaler, problem_folder):
     X_test = vectorizer.transform(X_test)
 
     #X_test = combine_features(X_test, vectorizers)
@@ -148,7 +145,7 @@ def test(problem_folder, vectorizer, clf, max_abs_scaler):
     classes = clf.classes_.tolist()
     classes.append('<UNK>')
 
-    calculate_f1_scores(y_test, y_pred, classes, return_precision_recall=True)
+    #calculate_f1_scores(y_test, y_pred, classes, return_precision_recall=True)
     output_y_pred(y_pred, problem_folder)
     return accuracy_score(y_test, y_pred), classification_report(y_test, y_pred)
 
@@ -156,11 +153,28 @@ def run_experiment(vectorizer, classifier, problem_folder):
     print(f"Vectorizer: {type(vectorizer).__name__}")
     print(f"Classifier: {type(classifier).__name__}")
 
-    clf, max_abs = train(problem_folder, vectorizer, classifier)
-    accuracy, report = test(problem_folder, vectorizer, clf, max_abs)
+    X_train, y_train = load_train_data(problem_folder)
+    X_test, y_test = load_test_data(problem_folder)
+    X, y = X_train + X_test, y_train + y_test
 
-    print("Accuracy: ", accuracy)
-    print(report)
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    fold_accuracy = []
+    f1_scores = []
+    for train_index, test_index in kf.split(X):
+        X_train, X_test = [X[i] for i in train_index], [X[i] for i in test_index]
+        y_train, y_test = [y[i] for i in train_index], [y[i] for i in test_index]
+
+        clf, max_abs = train(X_train, y_train, vectorizer, classifier)
+        accuracy, report = test(X_test, y_test, vectorizer, clf, max_abs, problem_folder)
+        f1_score = report.split("\n")[-3].split("      ")[-2]
+        fold_accuracy.append(accuracy)
+        f1_scores.append(float(f1_score.strip()))
+
+        print("Accuracy: ", accuracy)
+        print(report)
+
+    print("Average accuracy: ", np.mean(fold_accuracy))
+    print("Average F1 score: ", np.mean(f1_scores))
 
 # def combine_features(X, vectorizers, fit=False):
 #     features = []
@@ -212,7 +226,8 @@ if __name__ == "__main__":
 
     #clf = GridSearchCV(SVC(), param_grid, cv=5, n_jobs=-1, verbose=1, scoring='f1_macro', refit=True)
     clf = SVC(C=1, class_weight='balanced', coef0=0.0, decision_function_shape='ovo', degree=2, gamma="auto", kernel='rbf', probability=True, shrinking=True)
-    
+    clf = CalibratedClassifierCV(OneVsRestClassifier(clf), method='sigmoid', n_jobs=-1)
+
     for vectorizer in vectorizers:
         run_experiment(vectorizer, clf, args.input_base_path)
         print("\n---\n")
