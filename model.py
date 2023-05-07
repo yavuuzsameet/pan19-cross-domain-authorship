@@ -95,18 +95,6 @@ def calculate_f1_scores(y_true, y_pred, classes, return_precision_recall=False):
     if(return_precision_recall): return micro_f1, macro_f1, micro_precision, micro_recall, macro_precision, macro_recall
     else: return micro_f1, macro_f1
 
-def output_y_pred(y_pred, problem_folder):
-    predictions = []
-    for i, y in enumerate(y_pred):
-        entry = {
-            "unknown-text": "unknown{}.txt".format(str(i+1).zfill(5)),
-            "predicted-author": y
-        }
-        predictions.append(entry)
-
-    with open(os.path.join(problem_folder, 'answers-{}.json'.format(problem_folder.split("/")[1])), 'w') as f:
-        json.dump(predictions, f)
-
 def train(X_train, y_train, vectorizer, classifier):
     X_train = vectorizer.fit_transform(X_train)
 
@@ -116,28 +104,28 @@ def train(X_train, y_train, vectorizer, classifier):
     scaled_train_data = max_abs_scaler.fit_transform(X_train)
 
     classifier.fit(scaled_train_data, y_train)
-    # best_clf = classifier.best_estimator_
-
-    # print("Best params: ", classifier.best_params_)
-    # print("Best score: ", classifier.best_score_)
-    # print("Best clf: ", best_clf)
 
     return classifier, max_abs_scaler
 
 def test(X_test, y_test, vectorizer, clf, max_abs_scaler, problem_folder):
     X_test = vectorizer.transform(X_test)
+    print(X_test.shape)
 
     #X_test = combine_features(X_test, vectorizers)
 
     scaled_test_data = max_abs_scaler.transform(X_test)
 
-    # y_pred = clf.predict(scaled_test_data)
     y_pred_proba = clf.predict_proba(scaled_test_data)
     y_pred = []
 
     for proba in y_pred_proba:
+        
         max_proba_index = proba.argmax()
-        if proba[max_proba_index] >= 0.25:
+
+        unk_prob = 1
+        for p in proba: unk_prob *= (1-p)
+
+        if proba[max_proba_index] >= unk_prob:
             y_pred.append(clf.classes_[max_proba_index])
         else:
             y_pred.append('<UNK>')
@@ -146,45 +134,54 @@ def test(X_test, y_test, vectorizer, clf, max_abs_scaler, problem_folder):
     classes.append('<UNK>')
 
     #calculate_f1_scores(y_test, y_pred, classes, return_precision_recall=True)
-    output_y_pred(y_pred, problem_folder)
     return accuracy_score(y_test, y_pred), classification_report(y_test, y_pred)
 
 def run_experiment(vectorizer, classifier, problem_folder):
     print(f"Vectorizer: {type(vectorizer).__name__}")
     print(f"Classifier: {type(classifier).__name__}")
 
+    #X_train, y_train = load_train_data(problem_folder)
+    #X_test, y_test = load_test_data(problem_folder)
+
+    #X, y = X_train + X_test, y_train + y_test
+
+    #kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    #fold_accuracy = []
+    #f1_scores = []
+    # for train_index, test_index in kf.split(X):
+    #     X_train, X_test = [X[i] for i in train_index], [X[i] for i in test_index]
+    #     y_train, y_test = [y[i] for i in train_index], [y[i] for i in test_index]
+
+    #     clf, max_abs = train(X_train, y_train, vectorizer, classifier)
+    #     accuracy, report = test(X_test, y_test, vectorizer, clf, max_abs, problem_folder)
+    #     f1_score = report.split("\n")[-3].split("      ")[-2]
+    #     fold_accuracy.append(accuracy)
+    #     f1_scores.append(float(f1_score.strip()))
+
+    #     print("Accuracy: ", accuracy)
+    #     print(report)
+
+    # print("Average accuracy: ", np.mean(fold_accuracy))
+    # print("Average F1 score: ", np.mean(f1_scores))
+
     X_train, y_train = load_train_data(problem_folder)
     X_test, y_test = load_test_data(problem_folder)
-    X, y = X_train + X_test, y_train + y_test
 
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    fold_accuracy = []
-    f1_scores = []
-    for train_index, test_index in kf.split(X):
-        X_train, X_test = [X[i] for i in train_index], [X[i] for i in test_index]
-        y_train, y_test = [y[i] for i in train_index], [y[i] for i in test_index]
+    clf, max_abs = train(X_train, y_train, vectorizer, classifier)
 
-        clf, max_abs = train(X_train, y_train, vectorizer, classifier)
-        accuracy, report = test(X_test, y_test, vectorizer, clf, max_abs, problem_folder)
-        f1_score = report.split("\n")[-3].split("      ")[-2]
-        fold_accuracy.append(accuracy)
-        f1_scores.append(float(f1_score.strip()))
+    accuracy, report = test(X_test, y_test, vectorizer, clf, max_abs, problem_folder)
 
-        print("Accuracy: ", accuracy)
-        print(report)
+    print("Accuracy: ", accuracy)
+    print(report)
 
-    print("Average accuracy: ", np.mean(fold_accuracy))
-    print("Average F1 score: ", np.mean(f1_scores))
-
-# def combine_features(X, vectorizers, fit=False):
-#     features = []
-#     for vec in vectorizers:
-#         if fit:
-#             features.append(vec.fit_transform(X))
-#         else:
-#             features.append(vec.transform(X))
-#     return hstack(features)
-
+def combine_features(X, vectorizers, fit=False):
+    features = []
+    for vec in vectorizers:
+        if fit:
+            features.append(vec.fit_transform(X))
+        else:
+            features.append(vec.transform(X))
+    return hstack(features)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train PAN2019")
@@ -192,45 +189,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # vectorizers = [
-    #     TfidfVectorizer(ngram_range=(1,2), max_features=10000, max_df=0.5, norm='l2', sublinear_tf=True),
-    #     CountVectorizer(ngram_range=(1,2), max_features=10000, max_df=0.5)
-    # ]
+    vectorizer = TfidfVectorizer(ngram_range=(1,3), max_features=25000, max_df=0.50, min_df=2, norm='l2', sublinear_tf=True),
 
-    # classifiers = [
-    #     SVC(kernel='linear'),
-    #     SVC(C=10, kernel='sigmoid', gamma='scale'),
-    #     RandomForestClassifier(n_estimators=100),
-    #     GradientBoostingClassifier(),
-    #     LogisticRegression(max_iter=1000)
-    # ]
+    clf = SVC(gamma='auto', kernel='rbf', probability=True)
+    clf = OneVsRestClassifier(clf)
 
-    vectorizers = [
-        TfidfVectorizer(ngram_range=(1, 3), max_features=15000, max_df=0.5, min_df=2, norm='l2', sublinear_tf=True),
-    ]
-    #TfidfVectorizer(analyzer='char', ngram_range=(2, 4), max_features=10000, max_df=0.5, norm='l2', sublinear_tf=True)
-
-    # param_grid = {
-    #     'C': [0.1, 1, 10, 100, 1000],
-    #     'gamma': ['scale', 'auto', 1, 0.1, 0.001, 0.0001],
-    #     'kernel': ['linear', 'rbf', 'sigmoid', 'poly'],
-    #     'class_weight': ['balanced', None],
-    #     'decision_function_shape': ['ovo', 'ovr'],
-    #     'shrinking': [True, False],
-    #     'probability': [True, False],
-    #     'degree': [2, 3, 4],
-    #     'coef0': [0.0, 0.1, 0.5, 1.0]
-    # }
-
-    # param_grid = {'C': [10], 'class_weight': ['balanced'], 'coef0': [0.0], 'decision_function_shape': ['ovo'], 'degree': [2], 'gamma': [1], 'kernel': ['sigmoid'], 'probability': [True], 'shrinking': [True]}
-
-    #clf = GridSearchCV(SVC(), param_grid, cv=5, n_jobs=-1, verbose=1, scoring='f1_macro', refit=True)
-    clf = SVC(C=1, class_weight='balanced', coef0=0.0, decision_function_shape='ovo', degree=2, gamma="auto", kernel='rbf', probability=True, shrinking=True)
-    clf = CalibratedClassifierCV(OneVsRestClassifier(clf), method='sigmoid', n_jobs=-1)
-
-    for vectorizer in vectorizers:
-        run_experiment(vectorizer, clf, args.input_base_path)
-        print("\n---\n")
+    run_experiment(vectorizer, clf, args.input_base_path)
+    print("\n---\n")
 
 
     

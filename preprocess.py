@@ -63,6 +63,9 @@ def preprocess(text, min_word_length=3, min_word_freq=3, ngram_range=(1, 3)):
     stop_words = set(stopwords.words('english'))
     words = [w for w in words if w not in stop_words]
 
+    # replace all integers and floats with <NUM>
+    words = [re.sub(r'\d+.\d+|\d+', '<NUM>', w) for w in words]
+
     # Apply Porter stemming
     #stemmer = PorterStemmer()
     #words = [stemmer.stem(w) for w in words]
