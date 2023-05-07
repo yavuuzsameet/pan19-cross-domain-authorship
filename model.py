@@ -1,19 +1,11 @@
 from sklearn import preprocessing
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report, accuracy_score
-from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC
-from sklearn.model_selection import GridSearchCV, KFold
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
-from scipy.sparse import hstack
 from collections import defaultdict
-import numpy as np
 import argparse
 import os
-import json
 
 def load_train_data(problem_folder):
     author_folders = [f for f in os.listdir(problem_folder) if f.startswith("candidate")]
@@ -98,8 +90,6 @@ def calculate_f1_scores(y_true, y_pred, classes, return_precision_recall=False):
 def train(X_train, y_train, vectorizer, classifier):
     X_train = vectorizer.fit_transform(X_train)
 
-    #X_train = combine_features(X_train, vectorizers, fit=True)
-
     max_abs_scaler = preprocessing.MaxAbsScaler()
     scaled_train_data = max_abs_scaler.fit_transform(X_train)
     print(scaled_train_data.shape)
@@ -110,8 +100,6 @@ def train(X_train, y_train, vectorizer, classifier):
 
 def test(X_test, y_test, vectorizer, clf, max_abs_scaler, problem_folder):
     X_test = vectorizer.transform(X_test)
-
-    #X_test = combine_features(X_test, vectorizers)
 
     scaled_test_data = max_abs_scaler.transform(X_test)
 
@@ -179,15 +167,6 @@ def run_experiment(vectorizer, classifier, problem_folder):
 
     print("Accuracy: ", accuracy)
     print(report)
-
-def combine_features(X, vectorizers, fit=False):
-    features = []
-    for vec in vectorizers:
-        if fit:
-            features.append(vec.fit_transform(X))
-        else:
-            features.append(vec.transform(X))
-    return hstack(features)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train PAN2019")
