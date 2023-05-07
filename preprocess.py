@@ -5,6 +5,9 @@ import argparse
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+from nltk.stem import SnowballStemmer
+from nltk import ngrams
+from collections import Counter
 import json
 
 # Download the NLTK stop words if you haven't already
@@ -44,7 +47,7 @@ def load_unknown_data(problem_folder):
     return data
 
 
-def preprocess(text):
+def preprocess(text, min_word_length=3, min_word_freq=3, ngram_range=(1, 3)):
     # Handle punctuation
     translator = str.maketrans('/-', '  ', string.punctuation.translate(str.maketrans('', '', '/-.')))
     text = text.translate(translator)
@@ -63,6 +66,20 @@ def preprocess(text):
     # Apply Porter stemming
     #stemmer = PorterStemmer()
     #words = [stemmer.stem(w) for w in words]
+
+    # Remove short words
+    #words = [w for w in words if len(w) >= min_word_length]
+
+    # Apply Snowball stemming
+    # stemmer = SnowballStemmer("english")
+    # words = [stemmer.stem(w) for w in words]
+
+    # Generate n-grams
+    # ngrams_list = []
+    # for n in range(ngram_range[0], ngram_range[1] + 1):
+    #     ngrams_list.extend(ngrams(words, n))
+
+    # ngrams_joined = [' '.join(ngram) for ngram in ngrams_list]
 
     return ' '.join(words)
 
