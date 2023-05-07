@@ -6,6 +6,7 @@ from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier
 from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV, KFold
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.pipeline import FeatureUnion, FunctionTransformer, Pipeline 
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from scipy.sparse import hstack
@@ -14,6 +15,9 @@ import numpy as np
 import argparse
 import os
 import json
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
 
 def load_train_data(problem_folder):
     author_folders = [f for f in os.listdir(problem_folder) if f.startswith("candidate")]
@@ -95,13 +99,20 @@ def calculate_f1_scores(y_true, y_pred, classes, return_precision_recall=False):
     if(return_precision_recall): return micro_f1, macro_f1, micro_precision, micro_recall, macro_precision, macro_recall
     else: return micro_f1, macro_f1
 
+def extract_pos_tags(X):
+    doc = nlp(X)
+    return " ".join([token.pos_ for token in doc])
+
+def create_pos_tags_features(X):
+    return [extract_pos_tags(text) for text in X]
+
+
 def train(X_train, y_train, vectorizer, classifier):
     X_train = vectorizer.fit_transform(X_train)
 
-    #X_train = combine_features(X_train, vectorizers, fit=True)
-
     max_abs_scaler = preprocessing.MaxAbsScaler()
     scaled_train_data = max_abs_scaler.fit_transform(X_train)
+    print(scaled_train_data.shape)
 
     classifier.fit(scaled_train_data, y_train)
 
@@ -109,9 +120,6 @@ def train(X_train, y_train, vectorizer, classifier):
 
 def test(X_test, y_test, vectorizer, clf, max_abs_scaler, problem_folder):
     X_test = vectorizer.transform(X_test)
-    print(X_test.shape)
-
-    #X_test = combine_features(X_test, vectorizers)
 
     scaled_test_data = max_abs_scaler.transform(X_test)
 
@@ -140,30 +148,6 @@ def run_experiment(vectorizer, classifier, problem_folder):
     print(f"Vectorizer: {type(vectorizer).__name__}")
     print(f"Classifier: {type(classifier).__name__}")
 
-    #X_train, y_train = load_train_data(problem_folder)
-    #X_test, y_test = load_test_data(problem_folder)
-
-    #X, y = X_train + X_test, y_train + y_test
-
-    #kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    #fold_accuracy = []
-    #f1_scores = []
-    # for train_index, test_index in kf.split(X):
-    #     X_train, X_test = [X[i] for i in train_index], [X[i] for i in test_index]
-    #     y_train, y_test = [y[i] for i in train_index], [y[i] for i in test_index]
-
-    #     clf, max_abs = train(X_train, y_train, vectorizer, classifier)
-    #     accuracy, report = test(X_test, y_test, vectorizer, clf, max_abs, problem_folder)
-    #     f1_score = report.split("\n")[-3].split("      ")[-2]
-    #     fold_accuracy.append(accuracy)
-    #     f1_scores.append(float(f1_score.strip()))
-
-    #     print("Accuracy: ", accuracy)
-    #     print(report)
-
-    # print("Average accuracy: ", np.mean(fold_accuracy))
-    # print("Average F1 score: ", np.mean(f1_scores))
-
     X_train, y_train = load_train_data(problem_folder)
     X_test, y_test = load_test_data(problem_folder)
 
@@ -174,22 +158,26 @@ def run_experiment(vectorizer, classifier, problem_folder):
     print("Accuracy: ", accuracy)
     print(report)
 
-def combine_features(X, vectorizers, fit=False):
-    features = []
-    for vec in vectorizers:
-        if fit:
-            features.append(vec.fit_transform(X))
-        else:
-            features.append(vec.transform(X))
-    return hstack(features)
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train PAN2019")
     parser.add_argument("--input_base_path", "-i", help="Base path of the input dataset")
 
     args = parser.parse_args()
 
-    vectorizer = TfidfVectorizer(ngram_range=(1,3), max_features=25000, max_df=0.50, min_df=2, norm='l2', sublinear_tf=True),
+    word_vectorizer = TfidfVectorizer(ngram_range=(1,3), max_df=0.5, min_df=2, norm='l2', sublinear_tf=True)
+    char_vectorizer = TfidfVectorizer(analyzer='char', ngram_range=(2,5), max_df=0.5, min_df=2, norm='l2', sublinear_tf=True)
+    pos_vectorizer = CountVectorizer(ngram_range=(1,2), max_df=0.5, min_df=2)
+
+    pos_transformer = FunctionTransformer(create_pos_tags_features, validate=False)
+
+    vectorizer = FeatureUnion([
+        ('word_tfidf', word_vectorizer),
+        ('char_tfidf', char_vectorizer),
+        ('pos_count', Pipeline([
+            ('pos_transformer', pos_transformer),
+            ('pos_vectorizer', pos_vectorizer)
+        ]))
+    ])
 
     clf = SVC(gamma='auto', kernel='rbf', probability=True)
     clf = OneVsRestClassifier(clf)

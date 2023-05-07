@@ -139,3 +139,35 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     preprocess_and_save_files(args.input_base_path, args.output_base_path)
+
+
+
+    # X_train, y_train = load_train_data(problem_folder)
+    # X_test, y_test = load_test_data(problem_folder)
+
+    # tokens = set()
+    # for x in X_train:
+    #     tokens.update(x.split(" "))
+
+    # print("Number of tokens: ", len(tokens))
+
+    # X, y = X_train + X_test, y_train + y_test
+
+    # kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    # fold_accuracy = []
+    # f1_scores = []
+    # for train_index, test_index in kf.split(X):
+    #     X_train, X_test = [X[i] for i in train_index], [X[i] for i in test_index]
+    #     y_train, y_test = [y[i] for i in train_index], [y[i] for i in test_index]
+
+    #     clf, max_abs = train(X_train, y_train, vectorizer, classifier)
+    #     accuracy, report = test(X_test, y_test, vectorizer, clf, max_abs, problem_folder)
+    #     f1_score = report.split("\n")[-3].split("      ")[-2]
+    #     fold_accuracy.append(accuracy)
+    #     f1_scores.append(float(f1_score.strip()))
+
+    #     print("Accuracy: ", accuracy)
+    #     print(report)
+
+    # print("Average accuracy: ", np.mean(fold_accuracy))
+    # print("Average F1 score: ", np.mean(f1_scores))
